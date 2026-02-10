@@ -1,0 +1,16 @@
+# DevGuard Controller Configuration
+# =================================
+
+# Daily tracking settings
+tracker:
+  daily_target_minutes: 60
+  tracked_process: "Code.exe"
+
+# Strict mode
+enforcer:
+  strict_mode:
+    enabled: true
+    forbidden_processes:
+      - "valorant.exe"
+      - "steam.exe"
+      - "discord.exe"
