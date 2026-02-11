@@ -14,3 +14,11 @@ enforcer:
       - "valorant.exe"
       - "steam.exe"
       - "discord.exe"
+
+# PostgreSQL Database
+database:
+  host: "localhost"
+  port: 5432
+  user: "postgres" 
+  password: "8190"
+  dbname: "devguard"
