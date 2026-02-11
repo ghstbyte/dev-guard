@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"dev-guard_app/internal/config"
 	"dev-guard_app/internal/database"
+	"dev-guard_app/internal/decision"
 	"dev-guard_app/internal/models"
 	"fmt"
 	"log"
@@ -77,6 +78,13 @@ func main() {
 		log.Printf("new day successfully created: %+v", newDay)
 	} else {
 		log.Printf("found existing day record: %+v", day)
+
+		day.ActiveMinutes = 40
+		day.Status = ""
+		DayResult := decision.CloseDay(*day, cfg.Tracker.DailyTargetMinutes)
+		repo.UpdateDay(ctx, DayResult)
+		log.Printf("Статус дня: %v", DayResult.Status)
+		log.Printf("Долг дня: %v", DayResult.DebtMinutes)
 	}
 
 	fmt.Println("Config loaded:")

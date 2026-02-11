@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"dev-guard_app/internal/models"
+	"fmt"
 	"time"
 )
 
@@ -64,4 +65,31 @@ func (r *Repository) CreateDayIfNotExists(ctx context.Context, day *models.Day) 
 		day.Description,
 	)
 	return err
+}
+
+func (r *Repository) UpdateDay(ctx context.Context, day models.Day) error {
+	res, err := r.db.ExecContext(ctx, `
+        UPDATE days 
+        SET 
+            status = $1,
+            debt_minutes = $2, 
+            active_minutes = $3,
+            description = $4
+        WHERE date = $5
+    `, day.Status, day.DebtMinutes, day.ActiveMinutes, day.Description, day.Date)
+
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rows != 1 {
+		return fmt.Errorf("no day updated for date %v", day.Date)
+	}
+
+	return nil
 }
