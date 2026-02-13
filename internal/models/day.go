@@ -5,23 +5,29 @@ import "time"
 type DayStatus string
 
 const (
-	DayPending   DayStatus = "ожидание"
-	DayCompleted DayStatus = "выполнен"
-	DayMissed    DayStatus = "пропущен"
-	DayOff       DayStatus = "выходной"
+	DayPending   DayStatus = "waiting"
+	DayCompleted DayStatus = "completed"
+	DayMissed    DayStatus = "missed"
+	DayOff       DayStatus = "off"
 )
 
 type Day struct {
 	Date          time.Time
 	ActiveMinutes int
-	Status        DayStatus
+	Status        DayStatus `db:"status"`
 	DebtMinutes   int
 	Description   string
 }
 
-// String реализует интерфейс fmt.Stringer для удобного вывода.
 func (s DayStatus) String() string {
-	return string(s)
+	switch s {
+	case DayCompleted:
+		return "День выполнен ✅ "
+	case DayMissed:
+		return "День пропущен ❌ "
+	default:
+		return string(s)
+	}
 }
 
 // IsValid проверяет, что статус корректный (дополнительная защита).

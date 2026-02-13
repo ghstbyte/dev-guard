@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"dev-guard_app/internal/config"
 	"dev-guard_app/internal/database"
+	"dev-guard_app/internal/decision"
 	"dev-guard_app/internal/models"
 	"dev-guard_app/internal/tracker"
 	"fmt"
@@ -114,14 +115,19 @@ func main() {
 	// === Пауза на завершение ===
 	fmt.Println("Press Enter to exit...")
 	bufio.NewScanner(os.Stdin).Scan()
+
 	cancel()
-	// === Сохранение только active_minutes после трекинга ===
+
 	finalMinutes := track.GetActiveMinutes()
 	day.ActiveMinutes = finalMinutes
-	if err := repo.UpdateDay(ctx, *day); err != nil {
+
+	closedDay := decision.CloseDay(*day, cfg.Tracker.DailyTargetMinutes)
+
+	if err := repo.UpdateDay(ctx, closedDay); err != nil {
 		log.Printf("Ошибка финального сохранения: %v", err)
 	} else {
-		log.Printf("Финальное сохранение при выходе: %d минут активности", finalMinutes)
+		log.Printf("День закрыт: статус %s, активных минут %d, долг %d минут",
+			closedDay.Status, closedDay.ActiveMinutes, closedDay.DebtMinutes)
 	}
 	log.Println("Application finished")
 }

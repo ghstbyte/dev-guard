@@ -12,7 +12,7 @@ func IsDayCompleted(ActiveMinutes, dailyNorm int) models.DayStatus {
 }
 
 func CloseDay(day models.Day, dailyNorm int) models.Day {
-	if day.Status == models.DayOff {
+	if day.Status == models.DayOff || day.Status == models.DayCompleted || day.Status == models.DayMissed {
 		return day
 	}
 

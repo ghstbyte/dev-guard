@@ -3,8 +3,8 @@
 
 # Daily tracking settings
 tracker:
-  daily_target_minutes: 60
-  tracked_process: "steam.exe"
+  daily_target_minutes: 2
+  tracked_process: "Code.exe"
 
 # Strict mode
 enforcer:
