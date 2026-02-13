@@ -6,6 +6,14 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+type DatabaseConfig struct {
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	User     string `yaml:"user"`
+	Password string `yaml:"password"`
+	DBName   string `yaml:"dbname"`
+}
+
 type TrackerConfig struct {
 	DailyTargetMinutes int    `yaml:"daily_target_minutes"` // Цель минут в день
 	TrackerProcess     string `yaml:"tracked_process"`      // Отслеживаемый для работы процесс
@@ -21,6 +29,7 @@ type EnforcerConfig struct {
 }
 
 type Config struct {
+	Database DatabaseConfig `yaml:"database"`
 	Tracker  TrackerConfig  `yaml:"tracker"`
 	Enforcer EnforcerConfig `yaml:"enforcer"`
 }

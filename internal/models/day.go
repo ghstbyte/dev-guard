@@ -5,6 +5,7 @@ import "time"
 type DayStatus string
 
 const (
+	DayPending   DayStatus = "ожидание"
 	DayCompleted DayStatus = "выполнен"
 	DayMissed    DayStatus = "пропущен"
 	DayOff       DayStatus = "выходной"
