@@ -7,6 +7,7 @@ import (
 	"dev-guard_app/internal/config"
 	"dev-guard_app/internal/database"
 	"dev-guard_app/internal/decision"
+	"dev-guard_app/internal/enforcer"
 	"dev-guard_app/internal/models"
 	"dev-guard_app/internal/tracker"
 	"fmt"
@@ -91,6 +92,15 @@ func main() {
 	trackCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go track.StartTracking(trackCtx)
+
+	yesterday := today.AddDate(0, 0, -1)
+	prevDay, err := repo.GetDayByDate(ctx, yesterday)
+	if prevDay != nil && prevDay.Status == models.DayMissed && cfg.Enforcer.StrictMode.Enabled {
+		log.Println("STRICT MODE ACTIVATED")
+
+		enf := enforcer.NewEnforcer(cfg.Enforcer.StrictMode.ForbiddenProcesses, true)
+		enf.Start(trackCtx) // без go — горутина уже внутри Start
+	}
 
 	saveTicker := time.NewTicker(60 * time.Second)
 	defer saveTicker.Stop()
