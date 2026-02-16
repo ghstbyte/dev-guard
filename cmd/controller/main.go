@@ -13,6 +13,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 	"time"
 )
 
@@ -27,7 +30,6 @@ func main() {
 		return
 	}
 
-	// Подключение к БД
 	connStr := fmt.Sprintf(
 		"host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
 		cfg.Database.Host,
@@ -49,7 +51,6 @@ func main() {
 	}
 	log.Println("successfully connected to database")
 
-	// === Репозиторий и работа с днём (перемещено вверх) ===
 	repo := database.NewRepository(db)
 
 	ctx := context.Background()
@@ -79,7 +80,6 @@ func main() {
 		log.Printf("Найден существующий день: %d минут (статус %s)", day.ActiveMinutes, day.Status)
 	}
 
-	// === Создание трекера и загрузка минут из БД ===
 	log.Println("=== Запуск трекера процесса ===")
 
 	track := tracker.Tracker{
@@ -88,32 +88,33 @@ func main() {
 	track.ActiveSeconds = int64(day.ActiveMinutes * 60)
 	log.Printf("Трекер загружен с %d минутами (%d секундами) из БД", day.ActiveMinutes, track.ActiveSeconds)
 
-	// === Запуск трекинга  ===
-	trackCtx, cancel := context.WithCancel(context.Background())
+	rootCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go track.StartTracking(trackCtx)
 
-	yesterday := today.AddDate(0, 0, -1)
-	prevDay, err := repo.GetDayByDate(ctx, yesterday)
-	if prevDay != nil && prevDay.Status == models.DayMissed && cfg.Enforcer.StrictMode.Enabled {
-		log.Println("STRICT MODE ACTIVATED")
+	var wg sync.WaitGroup
 
-		enf := enforcer.NewEnforcer(cfg.Enforcer.StrictMode.ForbiddenProcesses, true)
-		enf.Start(trackCtx) // без go — горутина уже внутри Start
-	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := track.StartTracking(rootCtx); err != nil && err != context.Canceled {
+			log.Printf("Tracker завершился с ошибкой: %v", err)
+		}
+	}()
 
 	saveTicker := time.NewTicker(60 * time.Second)
 	defer saveTicker.Stop()
 
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		for {
 			select {
-			case <-trackCtx.Done():
+			case <-rootCtx.Done():
 				return
 			case <-saveTicker.C:
 				currentMinutes := track.GetActiveMinutes()
 				day.ActiveMinutes = currentMinutes
-				if err := repo.UpdateDay(ctx, *day); err != nil {
+				if err := repo.UpdateDay(rootCtx, *day); err != nil {
 					log.Printf("Ошибка периодического сохранения: %v", err)
 				} else {
 					log.Printf("Периодическое сохранение: %d минут активности", currentMinutes)
@@ -122,22 +123,44 @@ func main() {
 		}
 	}()
 
-	// === Пауза на завершение ===
-	fmt.Println("Press Enter to exit...")
-	bufio.NewScanner(os.Stdin).Scan()
+	yesterday := today.AddDate(0, 0, -1)
+	prevDay, err := repo.GetDayByDate(rootCtx, yesterday)
+	if err != nil {
+		log.Printf("Ошибка получения вчерашнего дня: %v", err)
+	} else if prevDay != nil && prevDay.Status == models.DayMissed && cfg.Enforcer.StrictMode.Enabled && day.Status == models.DayPending {
+		log.Println("[STRICT MODE] ACTIVATED: вчерашний день пропущен, текущий день не открыт")
+		enf := enforcer.NewEnforcer(cfg.Enforcer.StrictMode.ForbiddenProcesses, true)
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			enf.Start(rootCtx)
+		}()
+	}
+
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, os.Interrupt, syscall.SIGTERM)
+
+	log.Println("DevGuard is running. Press Ctrl+C to stop gracefully.")
+
+	<-sigs
+	log.Println("Signal received. Starting graceful shutdown...")
 
 	cancel()
 
+	wg.Wait()
+
 	finalMinutes := track.GetActiveMinutes()
 	day.ActiveMinutes = finalMinutes
-
 	closedDay := decision.CloseDay(*day, cfg.Tracker.DailyTargetMinutes)
 
-	if err := repo.UpdateDay(ctx, closedDay); err != nil {
+	bgCtx := context.Background()
+	if err := repo.UpdateDay(bgCtx, closedDay); err != nil {
 		log.Printf("Ошибка финального сохранения: %v", err)
 	} else {
-		log.Printf("День закрыт: статус %s, активных минут %d, долг %d минут",
+		log.Printf("День закрыт при завершении: статус %s, активных минут %d, долг %d минут",
 			closedDay.Status, closedDay.ActiveMinutes, closedDay.DebtMinutes)
 	}
-	log.Println("Application finished")
+
+	log.Println("Graceful shutdown completed. Goodbye!")
 }
