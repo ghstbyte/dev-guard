@@ -91,6 +91,8 @@ func main() {
 	rootCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	var enforcerCancel context.CancelFunc
+
 	var wg sync.WaitGroup
 
 	wg.Add(1)
@@ -113,7 +115,44 @@ func main() {
 				return
 			case <-saveTicker.C:
 				currentMinutes := track.GetActiveMinutes()
+				previousMinutes := day.ActiveMinutes
 				day.ActiveMinutes = currentMinutes
+				if day.Status == models.DayPending {
+					if day.ActiveMinutes >= cfg.Tracker.DailyTargetMinutes {
+						closedDay := decision.CloseDay(*day, cfg.Tracker.DailyTargetMinutes)
+						*day = closedDay
+						log.Printf("День выполнен: %d минут (>= нормы %d), статус теперь %s", day.ActiveMinutes, cfg.Tracker.DailyTargetMinutes, day.Status)
+
+						if enforcerCancel != nil {
+							enforcerCancel()
+							enforcerCancel = nil
+							log.Println("[STRICT MODE] Disabled")
+						}
+					}
+				}
+
+				if day.Status == models.DayMissed {
+					newDebt := cfg.Tracker.DailyTargetMinutes - day.ActiveMinutes
+					if newDebt < 0 {
+						newDebt = 0
+					}
+					if newDebt != day.DebtMinutes {
+						day.DebtMinutes = newDebt
+						log.Printf("[ДОЛГ УМЕНЬШЕН] Было %d, стало %d (активных минут %d)", day.DebtMinutes+(day.ActiveMinutes-previousMinutes), day.DebtMinutes, day.ActiveMinutes)
+					}
+					if day.ActiveMinutes >= cfg.Tracker.DailyTargetMinutes {
+						day.Status = models.DayCompleted
+						day.DebtMinutes = 0
+						log.Printf("[ДЕНЬ РЕАБИЛИТИРОВАН] Статус %s, долг обнулён: %d минут (>= нормы %d)", day.Status, day.ActiveMinutes, cfg.Tracker.DailyTargetMinutes)
+
+						if enforcerCancel != nil {
+							enforcerCancel()
+							enforcerCancel = nil
+							log.Println("[STRICT MODE] Disabled — день реабилитирован")
+						}
+					}
+				}
+
 				if err := repo.UpdateDay(rootCtx, *day); err != nil {
 					log.Printf("Ошибка периодического сохранения: %v", err)
 				} else {
@@ -128,13 +167,15 @@ func main() {
 	if err != nil {
 		log.Printf("Ошибка получения вчерашнего дня: %v", err)
 	} else if prevDay != nil && prevDay.Status == models.DayMissed && cfg.Enforcer.StrictMode.Enabled && day.Status == models.DayPending {
-		log.Println("[STRICT MODE] ACTIVATED: вчерашний день пропущен, текущий день не открыт")
 		enf := enforcer.NewEnforcer(cfg.Enforcer.StrictMode.ForbiddenProcesses, true)
+		enforcerCtx, cancel := context.WithCancel(rootCtx)
+		enforcerCancel = cancel
+		log.Println("[STRICT MODE] ACTIVATED")
 
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			enf.Start(rootCtx)
+			enf.Start(enforcerCtx)
 		}()
 	}
 
