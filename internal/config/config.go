@@ -15,17 +15,17 @@ type DatabaseConfig struct {
 }
 
 type TrackerConfig struct {
-	DailyTargetMinutes int    `yaml:"daily_target_minutes"` // Цель минут в день
-	TrackerProcess     string `yaml:"tracked_process"`      // Отслеживаемый для работы процесс
+	DailyTargetMinutes int    `yaml:"daily_target_minutes"`
+	TrackerProcess     string `yaml:"tracked_process"`
 }
 
 type StrictModeConfig struct {
-	Enabled            bool     `yaml:"enabled"`             // Строгий режим вкл\выкл
-	ForbiddenProcesses []string `yaml:"forbidden_processes"` // Заблокированные процессы
+	Enabled            bool     `yaml:"enabled"`
+	ForbiddenProcesses []string `yaml:"forbidden_processes"`
 }
 
 type EnforcerConfig struct {
-	StrictMode StrictModeConfig `yaml:"strict_mode"` // Конфиг строгого режима
+	StrictMode StrictModeConfig `yaml:"strict_mode"`
 }
 
 type Config struct {

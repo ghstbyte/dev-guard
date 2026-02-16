@@ -30,7 +30,6 @@ func (s DayStatus) String() string {
 	}
 }
 
-// IsValid проверяет, что статус корректный (дополнительная защита).
 func (s DayStatus) IsValid() bool {
 	switch s {
 	case DayCompleted, DayMissed, DayOff:
