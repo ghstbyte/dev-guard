@@ -60,8 +60,8 @@ func (s *DayService) LoadOrCreateCurrentDay(ctx context.Context) error {
 
 	s.currentDay = day
 
-	s.tracker.ActiveSeconds = int64(s.currentDay.ActiveMinutes * 60)
-	log.Printf("Трекер загружен с %d минутами (%d секундами) из БД", s.currentDay.ActiveMinutes, s.tracker.ActiveSeconds)
+	s.tracker.SetActiveSeconds(int64(s.currentDay.ActiveMinutes * 60))
+	log.Printf("Трекер загружен с %d минутами из БД", s.currentDay.ActiveMinutes)
 
 	return nil
 }

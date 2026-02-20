@@ -3,6 +3,7 @@ package tracker
 import (
 	"context"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/tklauser/ps"
@@ -10,7 +11,8 @@ import (
 
 type Tracker struct {
 	ProcessName   string
-	ActiveSeconds int64
+	activeSeconds int64
+	mu            sync.Mutex
 }
 
 func IsProcessRunning(processName string) (bool, error) {
@@ -43,8 +45,8 @@ func (t *Tracker) StartTracking(ctx context.Context) error {
 				continue
 			}
 			if running {
-				interval := 10 * time.Second
-				t.ActiveSeconds += int64(interval.Seconds())
+				seconds := 10
+				t.AddSeconds(int64(seconds))
 				log.Println("Process active")
 			} else {
 				log.Println("Process not running")
@@ -53,6 +55,21 @@ func (t *Tracker) StartTracking(ctx context.Context) error {
 	}
 }
 
+func (t *Tracker) AddSeconds(seconds int64) {
+	t.mu.Lock()
+	t.activeSeconds += seconds
+	t.mu.Unlock()
+}
+
 func (t *Tracker) GetActiveMinutes() int {
-	return int(t.ActiveSeconds / 60)
+	t.mu.Lock()
+	secs := t.activeSeconds
+	t.mu.Unlock()
+	return int(secs / 60)
+}
+
+func (t *Tracker) SetActiveSeconds(secs int64) {
+	t.mu.Lock()
+	t.activeSeconds = secs
+	t.mu.Unlock()
 }
