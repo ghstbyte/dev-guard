@@ -13,20 +13,22 @@ import (
 )
 
 type DayService struct {
-	repo         *database.Repository
-	cfg          *config.Config
-	currentDay   *models.Day
-	strictCancel context.CancelFunc
-	tracker      *tracker.Tracker
+	repo              *database.Repository
+	cfg               *config.Config
+	currentDay        *models.Day
+	strictCancel      context.CancelFunc
+	tracker           *tracker.Tracker
+	lastLoggedMinutes int
 }
 
 func NewDayService(repo *database.Repository, cfg *config.Config, track *tracker.Tracker) *DayService {
 	return &DayService{
-		repo:         repo,
-		cfg:          cfg,
-		tracker:      track,
-		currentDay:   nil,
-		strictCancel: nil,
+		repo:              repo,
+		cfg:               cfg,
+		tracker:           track,
+		currentDay:        nil,
+		strictCancel:      nil,
+		lastLoggedMinutes: -1,
 	}
 }
 
@@ -121,7 +123,10 @@ func (s *DayService) Update(ctx context.Context) error {
 		log.Printf("Ошибка периодического сохранения: %v", err)
 		return err
 	} else {
-		log.Printf("Периодическое сохранение: %d минут активности", currentMinutes)
+		if currentMinutes != s.lastLoggedMinutes {
+			log.Printf("Периодическое сохранение: %d минут активности", currentMinutes)
+			s.lastLoggedMinutes = currentMinutes
+		}
 	}
 
 	return nil

@@ -13,6 +13,7 @@ type Tracker struct {
 	ProcessName   string
 	activeSeconds int64
 	mu            sync.Mutex
+	lastRunning   bool
 }
 
 func IsProcessRunning(processName string) (bool, error) {
@@ -23,7 +24,6 @@ func IsProcessRunning(processName string) (bool, error) {
 
 	for _, p := range RunningProcesses {
 		if p.Command() == processName {
-			log.Println("Найдено совпадение:", processName)
 			return true, nil
 		}
 	}
@@ -44,12 +44,18 @@ func (t *Tracker) StartTracking(ctx context.Context) error {
 				log.Printf("error checking process %s: %v", t.ProcessName, err)
 				continue
 			}
+
 			if running {
-				seconds := 10
-				t.AddSeconds(int64(seconds))
-				log.Println("Process active")
-			} else {
-				log.Println("Process not running")
+				t.AddSeconds(10)
+			}
+
+			if running != t.lastRunning {
+				if running {
+					log.Println("Process active")
+				} else {
+					log.Println("Process not running")
+				}
+				t.lastRunning = running
 			}
 		}
 	}
