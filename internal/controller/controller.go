@@ -5,8 +5,6 @@ import (
 	"dev-guard_app/internal/config"
 	"dev-guard_app/internal/database"
 	"dev-guard_app/internal/dayservice"
-	"dev-guard_app/internal/enforcer"
-	"dev-guard_app/internal/models"
 	"dev-guard_app/internal/tracker"
 	"log"
 	"os"
@@ -53,23 +51,7 @@ func (c *Controller) Run() error {
 		return err
 	}
 
-	now := time.Now()
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	yesterday := today.AddDate(0, 0, -1)
-	prevDay, err := c.repo.GetDayByDate(c.rootCtx, yesterday)
-	if err != nil {
-		log.Printf("Ошибка получения вчерашнего дня: %v", err)
-	} else if prevDay != nil && prevDay.Status == models.DayMissed && c.cfg.Enforcer.StrictMode.Enabled && c.dayService.GetCurrentDay().Status == models.DayPending {
-		enf := enforcer.NewEnforcer(c.cfg.Enforcer.StrictMode.ForbiddenProcesses, true)
-		enforcerCtx, cancel := context.WithCancel(c.rootCtx)
-		c.dayService.SetStrictCancel(cancel)
-		log.Println("[STRICT MODE] ACTIVATED")
-		c.wg.Add(1)
-		go func() {
-			defer c.wg.Done()
-			enf.Start(enforcerCtx)
-		}()
-	}
+	c.dayService.ActivateStrictModeIfNeeded(c.rootCtx)
 
 	saveTicker := time.NewTicker(60 * time.Second)
 	defer saveTicker.Stop()

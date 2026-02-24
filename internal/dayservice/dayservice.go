@@ -5,10 +5,12 @@ import (
 	"dev-guard_app/internal/config"
 	"dev-guard_app/internal/database"
 	"dev-guard_app/internal/decision"
+	"dev-guard_app/internal/enforcer"
 	"dev-guard_app/internal/models"
 	"dev-guard_app/internal/tracker"
 	"errors"
 	"log"
+	"sync"
 	"time"
 )
 
@@ -19,6 +21,8 @@ type DayService struct {
 	strictCancel      context.CancelFunc
 	tracker           *tracker.Tracker
 	lastLoggedMinutes int
+	isStrict          bool
+	mu                sync.Mutex
 }
 
 func NewDayService(repo *database.Repository, cfg *config.Config, track *tracker.Tracker) *DayService {
@@ -29,6 +33,7 @@ func NewDayService(repo *database.Repository, cfg *config.Config, track *tracker
 		currentDay:        nil,
 		strictCancel:      nil,
 		lastLoggedMinutes: -1,
+		isStrict:          false,
 	}
 }
 
@@ -152,4 +157,36 @@ func (s *DayService) FinalClose(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (s *DayService) ActivateStrictModeIfNeeded(ctx context.Context) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.isStrict {
+		log.Println("Strict-mode уже запущен.")
+		return
+	}
+
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	yesterday := today.AddDate(0, 0, -1)
+
+	prevDay, err := s.repo.GetDayByDate(ctx, yesterday)
+	if err != nil {
+		log.Printf("Ошибка при получении предыдущего дня %v", err)
+		return
+	}
+
+	if prevDay != nil && prevDay.Status == models.DayMissed && s.cfg.Enforcer.StrictMode.Enabled && s.currentDay.Status == models.DayPending {
+		enf := enforcer.NewEnforcer(s.cfg.Enforcer.StrictMode.ForbiddenProcesses, true)
+		enforcerCtx, cancel := context.WithCancel(ctx)
+		s.SetStrictCancel(cancel)
+		s.isStrict = true
+		log.Println("[STRICT MODE] ACTIVATED")
+
+		go func() {
+			enf.Start(enforcerCtx)
+		}()
+	}
 }
